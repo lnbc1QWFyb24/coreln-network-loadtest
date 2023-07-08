@@ -1,0 +1,20 @@
+{
+  "name": "coreln-network-load-test",
+  "module": "index.ts",
+  "type": "module",
+  "version": "0.0.1",
+  "devDependencies": {
+    "bun-types": "latest",
+    "@types/yargs": "^17.0.24"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "lnmessage": "^0.2.2",
+    "yargs": "^17.7.2"
+  },
+  "scripts": {
+    "build": "bun build ./index.ts --compile --outfile connections"
+  }
+}
