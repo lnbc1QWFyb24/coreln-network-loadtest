@@ -2,6 +2,8 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import LnMessage from "lnmessage";
 
+const SEC = 1000;
+
 yargs(hideBin(Bun.argv))
   .scriptName("coreln-load-test")
   .usage("$0 <cmd> [args]")
@@ -31,52 +33,63 @@ yargs(hideBin(Bun.argv))
         );
       }
 
+      const pendingConnections = [];
+
       while (connections.length) {
-        // wait random delay
-        await randomDelay;
-
         const connectionDetails = connections.shift();
-        const url = new URL(connectionDetails!);
 
-        const address = url.searchParams.get("address") as string; // nodeId@hostname:port
-        const rune = url.searchParams.get("rune") as string; // admin rune
-        const type = url.searchParams.get("type") as string; // direct | proxy
-        const value = url.searchParams.get("value") as string; // proxyUrl | wss:
-
-        const { publicKey, ip, port } = parseNodeAddress(address);
-
-        const socket = new LnMessage({
-          remoteNodePublicKey: publicKey,
-          wsProxy: type === "proxy" ? value : undefined,
-          wsProtocol: type === "direct" ? (value as "ws:" | "wss:") : undefined,
-          ip,
-          port: port || 9735,
-        });
-
-        console.log(`Connecting to ${address}`);
-        await socket.connect();
-        console.log(`Connected to ${address}`);
-
-        console.log("fetching initial data");
-        await Promise.all([
-          socket.commando({ method: "listfunds", rune }),
-          socket.commando({ method: "getinfo", rune }),
-          socket.commando({ method: "listinvoices", rune }),
-          socket.commando({ method: "listpays", rune }),
-        ]);
-        console.log("initial data fetched");
+        if (connectionDetails) {
+          pendingConnections.push(connectNode(connectionDetails));
+        }
       }
 
-      console.log("All nodes connected and data fetched!");
+      await Promise.all(pendingConnections);
     }
   )
   .help().argv;
 
-/** Will delay between 1 and 10 seconds */
-function randomDelay() {
-  const min = 10000;
-  const max = 10000;
+async function connectNode(connectionDetails: string) {
+  const url = new URL(connectionDetails!);
+  const address = url.searchParams.get("address") as string; // nodeId@hostname:port
+  const rune = url.searchParams.get("rune") as string; // admin rune
+  const type = url.searchParams.get("type") as string; // direct | proxy
+  const value = url.searchParams.get("value") as string; // proxyUrl | wss:
+  const { publicKey, ip, port } = parseNodeAddress(address);
 
+  await randomDelay();
+
+  const socket = new LnMessage({
+    remoteNodePublicKey: publicKey,
+    wsProxy: type === "proxy" ? value : undefined,
+    wsProtocol: type === "direct" ? (value as "ws:" | "wss:") : undefined,
+    ip,
+    port: port || 9735,
+  });
+
+  console.log(`Connecting to ${address}`);
+
+  await socket.connect();
+
+  console.log(`Connected to ${address}`);
+
+  console.log(`fetching initial data for ${publicKey}`);
+
+  await Promise.all([
+    socket.commando({ method: "listfunds", rune }),
+    socket.commando({ method: "getinfo", rune }),
+    socket.commando({ method: "listinvoices", rune }),
+    socket.commando({ method: "listpays", rune }),
+  ]);
+
+  console.log(`initial data fetched for ${publicKey}`);
+}
+
+/** Will delay between 1 second and 30 seconds
+ * to simulate all user connecting within 30 seconds
+ */
+function randomDelay() {
+  const min = 1 * SEC;
+  const max = 30 * SEC;
   const delay = Math.floor(Math.random() * (max - min + 1) + min);
 
   return new Promise((resolve) => setTimeout(resolve, delay));
